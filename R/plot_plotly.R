@@ -26,26 +26,34 @@
 #' )
 #' }
 plot_plotly <- function(data, linewidth, title, show_labels, background_lines) {
-
+  
   # 1. Prepare basic plot
   p <- plot_ly(type = "scatter", mode = "lines")
-
+  
   y_ticks <- tapply(data$y, data$subplot, mean)
-
+  
   # 2. Divide subplots with horizontal lines
   hline <- function(y = 0) list(type = "line", x0 = 0, x1 = 1, xref = "paper", y0 = y, y1 = y, line = list(color = "grey65", width = 0.5))
-  vline <- function(x = 0) list(type = "line", y0 = 0, y1 = 1, yref = "paper", x0 = x, x1 = x, line = list(color = "grey90", width = 0.1))
+  vline <- function(x = 0) list(type = "line", y0 = 0, y1 = 1, yref = "paper", x0 = x, x1 = x, line = list(color = "grey70", width = 0.1))
   horizontal_lines <- lapply(setdiff(seq_len(max(data$y)), data$y), hline)
-
+  
+  # default v breaks and ticks
+  min_date <- lubridate::floor_date(min(data$start, na.rm = TRUE), "month")
+  max_date <- lubridate::ceiling_date(max(data$end, na.rm = TRUE), "month")
+  default_breaks <- seq(min_date,
+                        max_date,
+                        by = "1 month")
+  default_ticks <- format(default_breaks, "%b %y")
+  
   # 3. Add vertical lines
   if(!is.null(background_lines)){
     day_breaks <- as.POSIXct(seq(min(c(data$start, data$end)), max(c(data$start, data$end)),
                                  length.out = round(background_lines) + 2), origin = "1970-01-01")
     vertical_lines <- lapply(day_breaks, vline)
   }else{
-    vertical_lines <- list()
+    vertical_lines <- lapply(default_breaks, vline)
   }
-
+  
   p <- layout(p,
               hovermode = "closest",
               plot_bgcolor = "#FCFCFC",
@@ -54,7 +62,16 @@ plot_plotly <- function(data, linewidth, title, show_labels, background_lines) {
               # Axis options:
               xaxis = list(linewidth = 1,  mirror = TRUE,
                            showgrid = is.null(background_lines),
-                           gridcolor = "grey90", title = ""),
+                           gridcolor = "grey90", title = "",
+                           tickvals = default_breaks,
+                           range = c(min(default_breaks), max(default_breaks)),
+                           ticktext = default_ticks),
+              xaxis2 = list(
+                overlaying = "x",
+                side = "top",
+                tickvals = default_breaks,
+                range = c(min(default_breaks), max(default_breaks)),
+                ticktext = default_ticks),
               yaxis = list(
                 linewidth = 1, mirror = TRUE,
                 range = c(0, max(data$y) + 1),
@@ -63,18 +80,19 @@ plot_plotly <- function(data, linewidth, title, show_labels, background_lines) {
                 tickvals = y_ticks,
                 ticktext = as.character(unique(data$group))
               )
+              
   )
-
+  
   # 4. plot ranges
   range_dat <- data[data$start != data$end, ]
-
+  
   lw <- ifelse(is.null(linewidth), min(100, 300/max(data$y)), linewidth) # 1-> 100, 2->100, 3->100, 4->70
-
+  
   if(nrow(range_dat) > 0){
     # draw ranges piecewise
     for (i in seq_len(nrow(range_dat))) {
       toAdd <- range_dat[i, ]
-
+      
       p <- add_trace(p,
                      x = c(toAdd$start, toAdd$end), # von, bis
                      y = toAdd$y,
@@ -83,6 +101,7 @@ plot_plotly <- function(data, linewidth, title, show_labels, background_lines) {
                      hoverinfo = "text",
                      text = toAdd$tooltip
       )
+      
       # add annotations or not
       if (show_labels) {
         p <- add_text(p,
@@ -97,13 +116,13 @@ plot_plotly <- function(data, linewidth, title, show_labels, background_lines) {
       }
     }
   }
-
+  
   # 5. plot events
   event_dat <- data[data$start == data$end, ]
   if(nrow(event_dat) > 0){
     # alternate y positions for event labels
     event_dat$labelY <- event_dat$y + 0.5 * rep_len(c(1, -1), nrow(event_dat))
-
+    
     # add all the markers for this Category
     p <- add_markers(p,
                      x = event_dat$start, y = event_dat$y,
@@ -111,9 +130,10 @@ plot_plotly <- function(data, linewidth, title, show_labels, background_lines) {
                        color = event_dat$col, size = 0.7 * lw, symbol = "circle",
                        line = list(color = "black", width = 1)
                      ),
-                     showlegend = F, hoverinfo = "text", text = event_dat$tooltip
-    )
-
+                     showlegend = F, hoverinfo = "text", text = event_dat$tooltip,
+                     xaxis = "x2"
+    ) 
+    
     # add annotations or not
     if (show_labels) {
       p <- add_text(p,
@@ -122,10 +142,10 @@ plot_plotly <- function(data, linewidth, title, show_labels, background_lines) {
                     textposition ="center", showlegend = F, text = event_dat$label, hoverinfo = "none"
       )
     }
-
+    
   }
-
-
+  
+  
   return(p)
 }
 
